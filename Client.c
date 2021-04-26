@@ -94,7 +94,8 @@ int main(){
 	/* null-terminate the received data */
 	echoBuffer[respStringLen] = '\0' ;
 	printf("Received: %s,%d,%d\n", packetBuffer.data, packetBuffer.count, packetBuffer.pSeqNo); /* Print the echoed arg */
-	close(sock);
+	printPacketWithNtohs(&packetBuffer);
+    close(sock);
 	exit(0);
 }
 

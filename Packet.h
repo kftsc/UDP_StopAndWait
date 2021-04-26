@@ -14,9 +14,10 @@ typedef struct PacketHeader{
 
 typedef struct Packet{
     //PacketHeader header;
+    char data[DATA_SIZE];  // the data should be 80 bits long with the \n. In C, however, there is a invisiable bit in array. So, here use 81
     short count;
     short pSeqNo;
-    char data[DATA_SIZE];  // the data should be 80 bits long with the \n. In C, however, there is a invisiable bit in array. So, here use 81
+    char padding[3];
 } Packet;
 
 Packet eof;
