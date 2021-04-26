@@ -8,7 +8,6 @@
 #include <time.h> /* for random seed */
 #include "Packet.h"
 
-#define MAX_SIZE 255 /*Longest string to send*/
 
 void crashOnError(char *errorMessage); /* fucntion in HandleError.c */
 void printPacketWithNtohs(Packet *packet); /* fucntion in HandleError.c */
@@ -24,21 +23,18 @@ int main(){
 	struct sockaddr_in servAddr; /* Echo server address */
 	struct sockaddr_in fromAddr; /* Source address of echo */
 	unsigned short servPort;
-	unsigned int fromSize;
 	char *servIP;
-	char *echoString; /* for test only  */
-	char echoBuffer[MAX_SIZE+1];
-	unsigned int echoStringLen;
     unsigned int packetSize;
-	int respStringLen;
+    int recvDataSize;
+    int totalPktRecv = 0;
+    int totalByteRecv = 0;
 
     Packet sendPacket;
+    Packet recvPacket;
     double ACKLossRatio;
 
     servIP = SERVER_IP;
     servPort = PORT;
-    echoString = "test"; /* for test only  */
-    echoStringLen = strlen(echoString); /* for test only  */
 
     printf("server IP: %s, Port: %d\n", servIP, servPort); /* check IP and Port */
 
@@ -72,29 +68,32 @@ int main(){
 	servAddr.sin_port = htons(servPort);  /* Server port */
 
 
-    /* send the packet to the server */
+    /* send the file name packet to the server */
     printf("sending...\n");
     if (sendto(sock, &sendPacket, packetSize, 0, (struct sockaddr *)&servAddr, sizeof(servAddr))!=packetSize)
 		crashOnError("Error on send");
 
     /* Receive from server */
     printf("receiving...\n");
-    struct Packet packetBuffer;
-    fromSize = sizeof(fromAddr);
-	if ((respStringLen = recvfrom(sock, &packetBuffer, sizeof(packetBuffer), 0, (struct sockaddr *) &fromAddr, &fromSize)) != packetSize)
-		crashOnError("recvfrom() failed") ;
-	
-	if (servAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr)
-	{
-		fprintf(stderr,"Error: received a packet from unknown source.\n");
-		exit(1);
-	}
-	
-	
-	/* null-terminate the received data */
-	echoBuffer[respStringLen] = '\0' ;
-	printf("Received: %s,%d,%d\n", packetBuffer.data, packetBuffer.count, packetBuffer.pSeqNo); /* Print the echoed arg */
-	printPacketWithNtohs(&packetBuffer);
+    FILE *output = fopen("out.txt", "w");
+    if (output == NULL){
+        crashOnError("failed to open output file\n");
+    }
+    do{
+        /* receive header */
+        if ((recvDataSize = recv(sock, &recvPacket, sizeof(Packet), 0)) <=0)
+            crashOnError("failed to receive packet header");
+        
+        /* print message */
+        printRecvMessage(&recvPacket, &totalPktRecv, &totalByteRecv);
+
+        /* output to file */
+        fputs(recvPacket.data, output);
+
+    }while(recvPacket.count != 0 && recvPacket.data != NULL);
+    fclose(output);
+
+    printf("%d Packets are received, %d date bytes are received in total\n", totalPktRecv, totalByteRecv);
     close(sock);
 	exit(0);
 }

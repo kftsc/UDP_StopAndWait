@@ -9,10 +9,9 @@
 #include <math.h>
 #include "Packet.h"
 
-#define MAX_SIZE 255   /* Longest string to echo */
 
 void crashOnError(char *errorMessage); /* fucntion in HandleError.c */
-void handleClient(int clientSock); /* function to handle client connection */
+void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket); /* function to handle client connection */
 void readFileToPacket(char *fileName); /* function to read file in server side */
 int simulateLoss(double packetLossRatio);
 void printPackets(); /* test function to print packets array */
@@ -29,10 +28,8 @@ int main(){
 	struct sockaddr_in servAddr; /* Local address */
 	struct sockaddr_in clntAddr; /* Client address */
 	unsigned int cliAddrLen; /* Length of incoming message */
-	char echoBuffer[MAX_SIZE]; /* Buffer for echo string */
 	unsigned short servPort; /* Server port */
-	int recvMsgSize; /* Size of received message */
-
+    int recvPktSize;
     int timeOutExpon;
     double timeout; /* time out value in microsecond */
     double packetLossRatio;
@@ -57,8 +54,8 @@ int main(){
     }
     
     printf("%d\n", simulateLoss(packetLossRatio));
-    readFileToPacket("input.txt");
-    printPackets();
+    //readFileToPacket("input.txt");
+    //printPackets();
 
     /* Create socket for connections */
     printf("creating socket...\n");
@@ -83,24 +80,56 @@ int main(){
 		cliAddrLen = sizeof(clntAddr);
         struct Packet packetBuffer;
 		
-		/* Block until receive message from a client */
-		if ((recvMsgSize = recvfrom(sock, &packetBuffer, sizeof(packetBuffer), 0, (struct sockaddr *) &clntAddr, &cliAddrLen)) < 0)
-			crashOnError("recvfrom() failed") ;
+		/* wait for connection to a client */
+		if ((recvPktSize = recvfrom(sock, &packetBuffer, sizeof(packetBuffer), 0, (struct sockaddr *) &clntAddr, &cliAddrLen)) < 0)
+			crashOnError("failed to receive from client") ;
 		
-		
+		/*  Handle  client */
 		printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
+		printPacketWithNtohs(&packetBuffer);
+        handleClient(sock, &clntAddr, &packetBuffer);
 		
-		/* Send received datagram back to the client */
-		if (sendto(sock, &packetBuffer, recvMsgSize, 0, (struct sockaddr *) &clntAddr, sizeof(clntAddr)) != recvMsgSize)
-			crashOnError("sendto() sent a different number of bytes than expected");
     }
 
 }
 
 
-void handleClient(int clientSock){
+void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket){
+    int totalPktSend = 0;
+    int totalByteSend = 0;
 
+    /* read the file according to the filename on the incoming packet */
+    readFileToPacket(recvPacket->data);
+    //printPackets();
+
+
+    /* send packets to client */
+    for(int i = 0; i < packetsLen; i++){
+        if (sendto(sock, &packets[i], sizeof(packets[i]), 0, (struct sockaddr *) clntAddr, sizeof(*clntAddr)) != sizeof(packets[i]))
+		    crashOnError("sendto() sent a different number of bytes than expected");
+
+        /* print message */
+        printSendMessage(&packets[i]);
+
+        /* update total pkt and bytes */
+        totalPktSend++;
+        totalByteSend += ntohs(packets[i].count);
+    }
+
+    /* send EOF */
+    eof.pSeqNo = htons(packetsLen % 2);
+    memset(eof.data, 0, DATA_SIZE);
+    eof.count = htons(strlen(eof.data));
+
+    if (sendto(sock, &eof, sizeof(eof), 0, (struct sockaddr *) clntAddr, sizeof(*clntAddr)) != sizeof(eof))
+		    crashOnError("sendto() sent a different number of bytes than expected");
+    /* print message */
+    printSendMessage(&eof);
+
+    printf("%d Packets are transmitted, %d date bytes are transmitted in total\n", totalPktSend, totalByteSend);
 }
+
+
 
 void readFileToPacket(char* fileName){
     printf("open the file: %s\n", fileName);
@@ -126,11 +155,13 @@ void readFileToPacket(char* fileName){
     }
 
     for(int i = 0; fgets(packets[i].data, sizeof(packets[i].data), fp) != NULL; i++){
-        packets[i].pSeqNo = htons(i);
+        packets[i].pSeqNo = htons(i % 2);
         packets[i].count = htons(strlen(packets[i].data));
     }
     fclose(fp);
 }
+
+
 
 int simulateLoss(double packetLossRatio){
     double n = 0;
