@@ -14,9 +14,11 @@ void crashOnError(char *errorMessage); /* fucntion in HandleError.c */
 void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket); /* function to handle client connection */
 void readFileToPacket(char *fileName); /* function to read file in server side */
 int simulateLoss(double packetLossRatio);
+void setTimer(double timeInterval);
 void printPackets(); /* test function to print packets array */
 void printSendMessage(Packet *packet); /* fucntion in HandleError.c */
 void printPacketWithNtohs(Packet *packet); /* fucntion in HandleError.c */
+void printACKPacketWithNtohs(ACKPacket *ack); /* fucntion in HandleError.c */
 
 struct Packet *packets; // a sequence of Packet
 
@@ -46,7 +48,7 @@ int main(){
     }
     timeout = pow(10, timeOutExpon);
     printf("timeout: %lf\n", timeout);
-
+    setTimer(timeout);
     printf("Please enter a Packet Loss Ratio between 0 and 1:");
     scanf("%lf", &packetLossRatio);
     if (packetLossRatio > 1){
@@ -114,6 +116,14 @@ void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPac
         /* update total pkt and bytes */
         totalPktSend++;
         totalByteSend += ntohs(packets[i].count);
+
+        /* waiting for ACK */
+        int recvACKSize;
+        ACKPacket ack;
+        unsigned int cliLen = sizeof(*clntAddr);
+        if ((recvACKSize = recvfrom(sock, &ack, sizeof(ack), 0, (struct sockaddr *) clntAddr, &cliLen)) < 0)
+			crashOnError("failed to receive ACK from client") ;
+        printACKPacketWithNtohs(&ack);
     }
 
     /* send EOF */
@@ -181,4 +191,13 @@ void printPackets(){
         printf("count: %d, sequenceNumber: %d, data: %s", ntohs(packets[i].count), ntohs(packets[i].pSeqNo), packets[i].data);
     }
     printf("\n");
+}
+
+void setTimer(double timeInterval){ /* timeInterval in microsecond  */
+    double timeIntervalSec = timeInterval / 1000000;
+    printf("set timer for %lf second\n", timeIntervalSec);
+    double clockNeeded = timeIntervalSec * CLOCKS_PER_SEC;
+    double clockCounter = clock();
+    while ((clock() - clockCounter) < clockNeeded);
+    printf("timer fiish\n");
 }

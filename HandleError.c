@@ -19,6 +19,11 @@ void printPacketWithNtohs(Packet *packet){
 	printf("pSeqNo: %d, count: %d, data: %s\n", ntohs(packet->pSeqNo), ntohs(packet->count), packet->data);
 }
 
+// print the ACKPacket
+void printACKPacketWithNtohs(ACKPacket *ack){
+	printf("ack(%d) received\n", ntohs(ack->index));
+}
+
 // print message required by the project instruction
 void printSendMessage(Packet *packet){
 	if (packet->count == 0 && packet->data[0] == 0){

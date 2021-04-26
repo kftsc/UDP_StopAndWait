@@ -20,6 +20,11 @@ typedef struct Packet{
     char padding[3];
 } Packet;
 
+typedef struct ACKPacket{
+    short index;
+} ACKPacket;
+
+
 Packet eof;
 
 

@@ -22,6 +22,7 @@ int main(){
     int sock; /*Socket descriptor*/
 	struct sockaddr_in servAddr; /* Echo server address */
 	struct sockaddr_in fromAddr; /* Source address of echo */
+    unsigned int fromSize;
 	unsigned short servPort;
 	char *servIP;
     unsigned int packetSize;
@@ -80,8 +81,9 @@ int main(){
         crashOnError("failed to open output file\n");
     }
     do{
-        /* receive header */
-        if ((recvDataSize = recv(sock, &recvPacket, sizeof(Packet), 0)) <=0)
+        fromSize = sizeof(fromAddr);fromSize = sizeof(fromAddr);
+        /* receive packet from server */
+        if ((recvDataSize = recvfrom(sock, &recvPacket, sizeof(Packet), 0, (struct sockaddr *) &fromAddr, &fromSize)) != sizeof(Packet))
             crashOnError("failed to receive packet header");
         
         /* print message */
@@ -89,6 +91,15 @@ int main(){
 
         /* output to file */
         fputs(recvPacket.data, output);
+
+        /* send ack to server for non-EOF packet*/
+        if (recvPacket.count != 0 && recvPacket.data != NULL){
+            ACKPacket ack;
+            ack.index = recvPacket.pSeqNo;
+            printf("ack(%d) sended\n", ntohs(ack.index));
+            if (sendto(sock, &ack, sizeof(ack), 0, (struct sockaddr *)&servAddr, sizeof(servAddr))!=sizeof(ACKPacket))
+                crashOnError("Error on send ack to server");
+        }
 
     }while(recvPacket.count != 0 && recvPacket.data != NULL);
     fclose(output);
