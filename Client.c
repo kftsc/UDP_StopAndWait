@@ -27,13 +27,21 @@ int main(){
 	char *servIP;
     unsigned int packetSize;
     int recvDataSize;
-    int totalPktRecv = 0;
-    int totalByteRecv = 0;
+
+    int totalPktRecv = 0; /* Total number of data packets received successfully */
+    int totalDupPkt = 0;  /* Number of duplicate data packets received */
+    int pktRecv = 0; /* Number of data packets received successfully, not including duplicates */
+    int totalByteRecv = 0; /* Total number of data bytes received which are delivered to user (this should be the sum of the count fields of allreceived packets not including duplicates) */
+    int ackSended = 0; /* Number of ACKs transmitted without loss */
+    int ackDropped = 0; /* Number of ACKs generated but dropped due to loss */
+    int totalAckGener = 0; /* Total number of ACKs generated (with and without loss) */
 
     Packet sendPacket;
     Packet recvPacket;
     int lastArrive = -1;
     double ACKLossRatio;
+
+
 
     servIP = SERVER_IP;
     servPort = PORT;
@@ -87,33 +95,59 @@ int main(){
         if ((recvDataSize = recvfrom(sock, &recvPacket, sizeof(Packet), 0, (struct sockaddr *) &fromAddr, &fromSize)) != sizeof(Packet))
             crashOnError("failed to receive packet header");
         
-        /* print message */
-            printRecvMessage(&recvPacket, &totalPktRecv, &totalByteRecv);
-
+        if (recvPacket.count == 0 && recvPacket.data[0] == 0){
+            /* receive eof */
+            printf("End of Transmission Packet with sequence number %d received with %d data bytes\n", ntohs(recvPacket.pSeqNo), ntohs(recvPacket.count));
+            break;
+        }
+        printf("Packet %d received with %d data bytes\n", ntohs(recvPacket.pSeqNo), ntohs(recvPacket.count));
+        totalPktRecv++;
         if (lastArrive != recvPacket.pSeqNo){
-            /* output to file */
+            /* first time recv pkt, output to file */
             fputs(recvPacket.data, output);
 
             lastArrive = recvPacket.pSeqNo;
+
+            printf("Packet %d delivered to user\n", ntohs(recvPacket.pSeqNo));
+            pktRecv++;
+            totalByteRecv += ntohs(recvPacket.count);
         }else{
-            printf("already received\n");
+            /* receive duplicate */
+            printf("Duplicate packet %d received with %d data bytes\n", ntohs(recvPacket.pSeqNo), ntohs(recvPacket.count));
+
+            totalDupPkt++;
         }
 
         /* send ack to server for non-EOF packet*/
         if (recvPacket.count != 0 && recvPacket.data != NULL){
-            if (simulateACKLoss(ACKLossRatio) == 0){
+            totalAckGener++;
+            printf("ACK %d generated for transmission\n", ntohs(recvPacket.pSeqNo));
+            if (simulateACKLoss(ACKLossRatio) == 0){ /* send ack successfully */
                 ACKPacket ack;
                 ack.index = recvPacket.pSeqNo;
-                printf("ack(%d) sended\n", ntohs(ack.index));
                 if (sendto(sock, &ack, sizeof(ack), 0, (struct sockaddr *)&servAddr, sizeof(servAddr))!=sizeof(ACKPacket))
                     crashOnError("Error on send ack to server");
-                }
+                
+                ackSended++;
+                printf("ACK %d successfully transmitted\n", ntohs(ack.index));
+            }else{
+                /* ack loss */
+                ackDropped++;
+                printf("ACK %d lost\n", ntohs(recvPacket.pSeqNo));
+            }
         }
 
     }while(recvPacket.count != 0 && recvPacket.data != NULL);
     fclose(output);
 
-    printf("%d Packets are received, %d date bytes are received in total\n", totalPktRecv, totalByteRecv);
+    printf("----------------------------------------------------------------------------------------------\n");
+    printf("%d data packets received successfully\n", totalPktRecv);
+    printf("%d duplicate data packets received)\n", totalDupPkt);
+    printf("%d data packets received successfully, not including duplicates\n", pktRecv);
+    printf("%d data bytes received which are delivered to user\n", totalByteRecv);
+    printf("%d ACKs transmitted without loss\n", ackSended);
+    printf("%d ACKs generated but dropped due to loss\n", ackDropped);
+    printf("%d ACKs generated (with and without loss)\n", totalAckGener);
     close(sock);
 	exit(0);
 }

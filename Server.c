@@ -174,7 +174,7 @@ void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPac
     /* print message */
     printSendMessage(&eof);
 
-    
+    printf("----------------------------------------------------------------------------------------------\n");
     printf("%d data packets generated for transmission\n", totalPktGener);
     printf("%d data bytes generated for transmission, initial transmission only \n", totalByteGener);
     printf("%d data packets generated for retransmission \n", totalPktRetran);
