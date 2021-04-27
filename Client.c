@@ -32,6 +32,7 @@ int main(){
 
     Packet sendPacket;
     Packet recvPacket;
+    int lastArrive = -1;
     double ACKLossRatio;
 
     servIP = SERVER_IP;
@@ -87,18 +88,26 @@ int main(){
             crashOnError("failed to receive packet header");
         
         /* print message */
-        printRecvMessage(&recvPacket, &totalPktRecv, &totalByteRecv);
+            printRecvMessage(&recvPacket, &totalPktRecv, &totalByteRecv);
 
-        /* output to file */
-        fputs(recvPacket.data, output);
+        if (lastArrive != recvPacket.pSeqNo){
+            /* output to file */
+            fputs(recvPacket.data, output);
+
+            lastArrive = recvPacket.pSeqNo;
+        }else{
+            printf("already received\n");
+        }
 
         /* send ack to server for non-EOF packet*/
         if (recvPacket.count != 0 && recvPacket.data != NULL){
-            ACKPacket ack;
-            ack.index = recvPacket.pSeqNo;
-            printf("ack(%d) sended\n", ntohs(ack.index));
-            if (sendto(sock, &ack, sizeof(ack), 0, (struct sockaddr *)&servAddr, sizeof(servAddr))!=sizeof(ACKPacket))
-                crashOnError("Error on send ack to server");
+            if (simulateACKLoss(ACKLossRatio) == 0){
+                ACKPacket ack;
+                ack.index = recvPacket.pSeqNo;
+                printf("ack(%d) sended\n", ntohs(ack.index));
+                if (sendto(sock, &ack, sizeof(ack), 0, (struct sockaddr *)&servAddr, sizeof(servAddr))!=sizeof(ACKPacket))
+                    crashOnError("Error on send ack to server");
+                }
         }
 
     }while(recvPacket.count != 0 && recvPacket.data != NULL);
@@ -114,7 +123,7 @@ int simulateACKLoss(double ACKLossRatio){
     double n = 0;
     
     n = ((double)rand() / (double)RAND_MAX);
-    printf("random: %f; input: %f\n",n, ACKLossRatio);
+    //printf("random: %f; input: %f\n",n, ACKLossRatio);
     if (n < ACKLossRatio){
         return 1;
     }else{

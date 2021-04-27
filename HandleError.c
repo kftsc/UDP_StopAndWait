@@ -21,7 +21,7 @@ void printPacketWithNtohs(Packet *packet){
 
 // print the ACKPacket
 void printACKPacketWithNtohs(ACKPacket *ack){
-	printf("ack(%d) received\n", ntohs(ack->index));
+	printf("ACK (%d) received\n", ntohs(ack->index));
 }
 
 // print message required by the project instruction

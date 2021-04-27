@@ -11,7 +11,7 @@
 
 
 void crashOnError(char *errorMessage); /* fucntion in HandleError.c */
-void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket); /* function to handle client connection */
+void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket, double packetLossRatio); /* function to handle client connection */
 void readFileToPacket(char *fileName); /* function to read file in server side */
 int simulateLoss(double packetLossRatio);
 void setTimer(double timeInterval);
@@ -34,6 +34,7 @@ int main(){
     int recvPktSize;
     int timeOutExpon;
     double timeout; /* time out value in microsecond */
+    struct timeval tv; /* time interval struct */
     double packetLossRatio;
 
     
@@ -48,7 +49,7 @@ int main(){
     }
     timeout = pow(10, timeOutExpon);
     printf("timeout: %lf\n", timeout);
-    setTimer(timeout);
+    //setTimer(timeout);
     printf("Please enter a Packet Loss Ratio between 0 and 1:");
     scanf("%lf", &packetLossRatio);
     if (packetLossRatio > 1){
@@ -75,6 +76,7 @@ int main(){
 	if (bind(sock, (struct sockaddr *)&servAddr, sizeof(servAddr)) < 0)
 		crashOnError ( "failed to bind");
 
+
     /* waiting for connection */
     printf("running...\n");
     for (;;){
@@ -89,16 +91,30 @@ int main(){
 		/*  Handle  client */
 		printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
 		printPacketWithNtohs(&packetBuffer);
-        handleClient(sock, &clntAddr, &packetBuffer);
+        /* set receive time out */
+        tv.tv_sec = 0;
+        tv.tv_usec = timeout;
+        if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0)
+            crashOnError("failed to set recv time out");
+        handleClient(sock, &clntAddr, &packetBuffer, packetLossRatio);
+        break;
 		
     }
+    close(sock);
 
 }
 
 
-void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket){
-    int totalPktSend = 0;
-    int totalByteSend = 0;
+void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPacket, double packetLossRatio){
+    int totalPktGener = 0; /* for initail transmission only */
+    int totalByteGener = 0; /* for initail transmission only */
+    int totalPktRetran = 0; /* initail transmission + retransmission */
+    int pktDropped = 0;
+    int pktSended = 0;
+    int ackRecved = 0;
+    int timeoutExper = 0;
+
+     int timeout_flag = 0;
 
     /* read the file according to the filename on the incoming packet */
     readFileToPacket(recvPacket->data);
@@ -106,24 +122,46 @@ void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPac
 
 
     /* send packets to client */
-    for(int i = 0; i < packetsLen; i++){
-        if (sendto(sock, &packets[i], sizeof(packets[i]), 0, (struct sockaddr *) clntAddr, sizeof(*clntAddr)) != sizeof(packets[i]))
-		    crashOnError("sendto() sent a different number of bytes than expected");
+    for(int i = 0; i < packetsLen;){
+       
+        if (timeout_flag == 0){  /* first time to transmit */
+            totalPktGener++;
+            totalByteGener += ntohs(packets[i].count);
+            printf("Packet %d generated for transmission with %d data bytes\n", ntohs(packets[i].pSeqNo), ntohs(packets[i].count));
+        }else{
+            printf("Packet %d generated for re-transmission with %d data bytes\n", ntohs(packets[i].pSeqNo), ntohs(packets[i].count));
+        }
+        totalPktRetran++;
+       
+        if (simulateLoss(packetLossRatio) == 0) {
+            /* successfully transmitted */
+            if (sendto(sock, &packets[i], sizeof(packets[i]), 0, (struct sockaddr *) clntAddr, sizeof(*clntAddr)) != sizeof(packets[i]))
+                crashOnError("sendto() sent a different number of bytes than expected");
 
-        /* print message */
-        printSendMessage(&packets[i]);
-
-        /* update total pkt and bytes */
-        totalPktSend++;
-        totalByteSend += ntohs(packets[i].count);
+            pktSended++;
+            printf("Packet %d successfully transmitted with %d data bytes\n", ntohs(packets[i].pSeqNo), ntohs(packets[i].count));
+            timeout_flag = 0;
+        }else {
+            /* loss */
+            pktDropped++;
+            printf("Packet %d lost\n", ntohs(packets[i].pSeqNo));
+        }
 
         /* waiting for ACK */
         int recvACKSize;
         ACKPacket ack;
         unsigned int cliLen = sizeof(*clntAddr);
-        if ((recvACKSize = recvfrom(sock, &ack, sizeof(ack), 0, (struct sockaddr *) clntAddr, &cliLen)) < 0)
-			crashOnError("failed to receive ACK from client") ;
-        printACKPacketWithNtohs(&ack);
+        if ((recvACKSize = recvfrom(sock, &ack, sizeof(ack), 0, (struct sockaddr *) clntAddr, &cliLen)) < 0){
+			//crashOnError("failed to receive ACK from client") ;
+            printf("Timeout expired for packet numbered %d\n", ntohs(packets[i].pSeqNo));
+            timeout_flag = 1;
+            timeoutExper++;
+        } 
+        if ( timeout_flag != 1) { // timeout does not occur
+            i+=1;
+            printACKPacketWithNtohs(&ack);
+            ackRecved++;
+        }
     }
 
     /* send EOF */
@@ -136,7 +174,15 @@ void handleClient(int sock, struct sockaddr_in* clntAddr, struct Packet* recvPac
     /* print message */
     printSendMessage(&eof);
 
-    printf("%d Packets are transmitted, %d date bytes are transmitted in total\n", totalPktSend, totalByteSend);
+    
+    printf("%d data packets generated for transmission\n", totalPktGener);
+    printf("%d data bytes generated for transmission, initial transmission only \n", totalByteGener);
+    printf("%d data packets generated for retransmission \n", totalPktRetran);
+    printf("%d data packets dropped due to loss \n", pktDropped);
+    printf("%d data packets transmitted successfully \n", pktSended);
+    printf("%d ACKs received \n", ackRecved);
+    printf("%d times timeout expired \n", timeoutExper);
+
 }
 
 
@@ -177,7 +223,7 @@ int simulateLoss(double packetLossRatio){
     double n = 0;
     
     n = ((double)rand() / (double)RAND_MAX);
-    printf("random: %f; input: %f\n",n, packetLossRatio);
+    //printf("random: %f; input: %f\n",n, packetLossRatio);
     if (n < packetLossRatio){
         return 1;
     }else{
