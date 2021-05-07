@@ -10,9 +10,6 @@
 
 
 void crashOnError(char *errorMessage); /* fucntion in HandleError.c */
-void printPacketWithNtohs(Packet *packet); /* fucntion in HandleError.c */
-void printRecvMessage(Packet *packet, int *totalPkt, int *totalByte); /* fucntion in HandleError.c */
-
 int simulateACKLoss(double ACKLossRatio);
 
 
