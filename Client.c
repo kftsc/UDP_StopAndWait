@@ -47,7 +47,7 @@ int main(){
     servPort = PORT;
 
     printf("server IP: %s, Port: %d\n", servIP, servPort); /* check IP and Port */
-
+    
     /* prompt fileName and ACK Loss Ratio*/
     printf("Please enter the file name: ");
     fgets(sendPacket.data, DATA_SIZE, stdin);  // read file name into packet

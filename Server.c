@@ -26,6 +26,7 @@ int packetsLen; // number of Packet in the sequence
 
 int main(){
     printf("start server...\n");
+    srand(time(NULL));
     int sock; /* Socket */
 	struct sockaddr_in servAddr; /* Local address */
 	struct sockaddr_in clntAddr; /* Client address */
@@ -92,8 +93,8 @@ int main(){
 		printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
 		printPacketWithNtohs(&packetBuffer);
         /* set receive time out */
-        tv.tv_sec = 0;
-        tv.tv_usec = timeout;
+        tv.tv_sec =  timeout / 1000000;
+        tv.tv_usec = timeout - tv.tv_sec * 1000000;
         if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0)
             crashOnError("failed to set recv time out");
         handleClient(sock, &clntAddr, &packetBuffer, packetLossRatio);

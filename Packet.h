@@ -7,17 +7,17 @@
 
 /* struct for Header and Packet */
 
-typedef struct PacketHeader{
+/* typedef struct PacketHeader{
     short count;
     short pSeqNo;
-} PacketHeader;
+} PacketHeader; */ // used for the TCP project
 
 typedef struct Packet{
     //PacketHeader header;
     char data[DATA_SIZE];  // the data should be 80 bits long with the \n. In C, however, there is a invisiable bit in array. So, here use 81
     short count;
     short pSeqNo;
-    char padding[3];
+    char padding[3]; // pading
 } Packet;
 
 typedef struct ACKPacket{
